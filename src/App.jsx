@@ -254,17 +254,40 @@ function SendVerificationPage({ orgName }) {
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [link, setLink] = useState('')
+  const [emailSent, setEmailSent] = useState(false)
+  const [sendError, setSendError] = useState('')
 
-  const handleSend = (e) => {
+  const handleSend = async (e) => {
     e.preventDefault()
     setLoading(true)
-    setTimeout(() => {
-      const token = Math.random().toString(36).substring(2, 10).toUpperCase()
-      const verifyLink = `https://address-verification-frontend.vercel.app?org=${encodeURIComponent(orgName)}&token=${token}`
-      setLink(verifyLink)
-      setSent(true)
+    setSendError('')
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/send-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerName: form.name,
+          customerEmail: form.email,
+          phone: form.phone,
+          orgName: orgName,
+          address: form.address,
+          city: form.city,
+          postcode: form.postcode
+        })
+      })
+      const result = await response.json()
+      if (response.ok) {
+        setLink(result.verify_link)
+        setEmailSent(result.email_sent)
+        setSent(true)
+      } else {
+        setSendError(result.error || 'Failed to send verification request')
+      }
+    } catch (err) {
+      setSendError('Network error — could not reach the server')
+    } finally {
       setLoading(false)
-    }, 1200)
+    }
   }
 
   if (sent) {
@@ -276,9 +299,19 @@ function SendVerificationPage({ orgName }) {
             <CheckCircle2 className="w-7 h-7 text-green-600" />
           </div>
           <h3 className="text-lg font-bold text-gray-900 mb-2">Verification Request Sent!</h3>
-          <p className="text-sm text-gray-500 mb-6">
-            A verification link has been generated for <strong>{form.name}</strong>. In production, this would be sent via SMS and email automatically.
+          <p className="text-sm text-gray-500 mb-3">
+            A verification link has been generated for <strong>{form.name}</strong>.
           </p>
+          {emailSent ? (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2.5 mb-4 text-sm text-green-700 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              Email sent to <strong>{form.email}</strong>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 mb-4 text-sm text-amber-700">
+              Email delivery unavailable — share the link below manually.
+            </div>
+          )}
           <div className="bg-gray-50 rounded-lg p-3 text-left mb-4">
             <p className="text-xs text-gray-500 mb-1 font-medium">Verification Link:</p>
             <p className="text-xs text-blue-600 break-all font-mono">{link}</p>
@@ -310,6 +343,11 @@ function SendVerificationPage({ orgName }) {
       </div>
 
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 max-w-2xl">
+        {sendError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+            {sendError}
+          </div>
+        )}
         <form onSubmit={handleSend} className="space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
