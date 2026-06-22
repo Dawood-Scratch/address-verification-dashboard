@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   LayoutDashboard, Send, ClipboardList, BarChart2,
   Key, LogOut, CheckCircle2, XCircle, Clock, AlertTriangle,
   Search, Download, RefreshCw, Plus, Eye, Copy, ChevronDown,
-  MapPin, Shield, TrendingUp, Users, Activity, Loader2
+  MapPin, Shield, TrendingUp, Users, Activity, Loader2,
+  Upload, FileSpreadsheet, FileText, ChevronRight, AlertCircle
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 
@@ -880,6 +881,360 @@ function AnalyticsPage({ verifications, loading }) {
   )
 }
 
+// ─── Batch Upload Page ───────────────────────────────────────────────────────
+function BatchUploadPage({ orgName }) {
+  const [step, setStep] = useState('upload') // 'upload' | 'processing' | 'results'
+  const [file, setFile] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [batchResult, setBatchResult] = useState(null)
+  const [uploadError, setUploadError] = useState('')
+  const [selectedRow, setSelectedRow] = useState(null)
+  const [batches, setBatches] = useState([])
+  const [loadingBatches, setLoadingBatches] = useState(true)
+  const fileInputRef = useRef(null)
+
+  // Load previous batches on mount
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/batches`)
+      .then(r => r.json())
+      .then(d => setBatches(d.batches || []))
+      .catch(() => {})
+      .finally(() => setLoadingBatches(false))
+  }, [])
+
+  const downloadTemplate = () => {
+    const headers = 'full_name,email,phone,address,city,postcode'
+    const example1 = 'James Okafor,james@example.com,+2348012345678,12 Broad Street,Lagos Island,101001'
+    const example2 = 'Amina Bello,amina@example.com,+2348098765432,5 Ahmadu Bello Way,Abuja,900001'
+    const csv = [headers, example1, example2].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'verifynow_batch_template.csv'; a.click()
+  }
+
+  const handleFile = (f) => {
+    if (!f) return
+    const ext = f.name.split('.').pop().toLowerCase()
+    if (!['csv', 'xlsx', 'xls'].includes(ext)) {
+      setUploadError('Please upload a .csv or .xlsx file')
+      return
+    }
+    setUploadError('')
+    setFile(f)
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault(); setDragOver(false)
+    const f = e.dataTransfer.files[0]
+    if (f) handleFile(f)
+  }
+
+  const handleSubmit = async () => {
+    if (!file) return
+    setUploading(true)
+    setUploadError('')
+    setStep('processing')
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('orgName', orgName)
+      const resp = await fetch(`${API_BASE_URL}/api/batch-upload`, {
+        method: 'POST',
+        body: formData
+      })
+      const data = await resp.json()
+      if (!resp.ok) {
+        setUploadError(data.error || 'Upload failed')
+        setStep('upload')
+      } else {
+        setBatchResult(data)
+        setBatches(prev => [{
+          batch_id: data.batch_id,
+          org_name: orgName,
+          created_at: new Date().toISOString(),
+          total_rows: data.summary.total,
+          sent: data.summary.sent,
+          failed: data.summary.failed,
+          skipped: data.summary.skipped
+        }, ...prev])
+        setStep('results')
+      }
+    } catch (err) {
+      setUploadError('Network error — could not reach the server')
+      setStep('upload')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const reset = () => {
+    setStep('upload'); setFile(null); setBatchResult(null); setUploadError(''); setSelectedRow(null)
+  }
+
+  const exportResults = () => {
+    if (!batchResult) return
+    const headers = ['Row', 'Name', 'Email', 'Address', 'Status', 'Email Sent', 'Token', 'Error']
+    const rows = batchResult.results.map(r => [
+      r.row, r.full_name, r.email, r.address, r.status,
+      r.email_sent ? 'Yes' : 'No', r.token || '', r.error || ''
+    ])
+    const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = `batch_${batchResult.batch_id}_results.csv`; a.click()
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Batch Upload</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Send verification requests to multiple customers at once</p>
+        </div>
+        <button
+          onClick={downloadTemplate}
+          className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-50 shadow-sm"
+        >
+          <Download className="w-4 h-4" /> Download CSV Template
+        </button>
+      </div>
+
+      {/* Step: Upload */}
+      {step === 'upload' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-4">
+            {/* Required columns info */}
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <p className="text-sm font-semibold text-blue-800 mb-2">Required CSV/Excel columns:</p>
+              <div className="flex flex-wrap gap-2">
+                {['full_name', 'email', 'address', 'city'].map(c => (
+                  <span key={c} className="bg-blue-100 text-blue-700 text-xs font-mono px-2.5 py-1 rounded-full">{c}</span>
+                ))}
+                <span className="text-xs text-blue-600 self-center">+ optional: phone, postcode</span>
+              </div>
+            </div>
+
+            {/* Drop zone */}
+            <div
+              onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all ${
+                dragOver ? 'border-blue-400 bg-blue-50' :
+                file ? 'border-green-400 bg-green-50' :
+                'border-gray-300 bg-white hover:border-blue-300 hover:bg-blue-50'
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                className="hidden"
+                onChange={e => handleFile(e.target.files[0])}
+              />
+              {file ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                    {file.name.endsWith('.csv') ? <FileText className="w-6 h-6 text-green-600" /> : <FileSpreadsheet className="w-6 h-6 text-green-600" />}
+                  </div>
+                  <p className="font-semibold text-gray-800">{file.name}</p>
+                  <p className="text-sm text-gray-500">{(file.size / 1024).toFixed(1)} KB · Click to change</p>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
+                    <Upload className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <p className="font-semibold text-gray-700">Drop your file here, or click to browse</p>
+                  <p className="text-sm text-gray-400">Supports .csv and .xlsx files</p>
+                </div>
+              )}
+            </div>
+
+            {uploadError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {uploadError}
+              </div>
+            )}
+
+            <button
+              onClick={handleSubmit}
+              disabled={!file || uploading}
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <Upload className="w-4 h-4" /> Send Verification Requests
+            </button>
+          </div>
+
+          {/* Previous batches sidebar */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-fit">
+            <div className="px-4 py-3 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-700">Previous Batches</h3>
+            </div>
+            {loadingBatches ? <LoadingSpinner message="Loading..." /> : batches.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-xs">No batches yet</div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {batches.slice(0, 8).map(b => (
+                  <div key={b.batch_id} className="px-4 py-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-mono text-gray-500">{b.batch_id}</span>
+                      <span className="text-xs text-gray-400">{new Date(b.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex gap-3 text-xs">
+                      <span className="text-gray-600">{b.total_rows} total</span>
+                      <span className="text-green-600">{b.sent} sent</span>
+                      {b.failed > 0 && <span className="text-red-500">{b.failed} failed</span>}
+                      {b.skipped > 0 && <span className="text-amber-500">{b.skipped} skipped</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Step: Processing */}
+      {step === 'processing' && (
+        <div className="bg-white rounded-xl p-12 shadow-sm border border-gray-100 text-center">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Processing Batch...</h3>
+          <p className="text-sm text-gray-500">Parsing file, generating tokens, and sending emails. This may take a moment for large files.</p>
+        </div>
+      )}
+
+      {/* Step: Results */}
+      {step === 'results' && batchResult && (
+        <div className="space-y-5">
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 text-center">
+              <div className="text-2xl font-bold text-gray-900">{batchResult.summary.total}</div>
+              <div className="text-xs text-gray-500 mt-1">Total Rows</div>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-green-100 text-center">
+              <div className="text-2xl font-bold text-green-600">{batchResult.summary.sent}</div>
+              <div className="text-xs text-gray-500 mt-1">Emails Sent</div>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-red-100 text-center">
+              <div className="text-2xl font-bold text-red-500">{batchResult.summary.failed}</div>
+              <div className="text-xs text-gray-500 mt-1">Failed</div>
+            </div>
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-amber-100 text-center">
+              <div className="text-2xl font-bold text-amber-500">{batchResult.summary.skipped}</div>
+              <div className="text-xs text-gray-500 mt-1">Skipped</div>
+            </div>
+          </div>
+
+          {/* Batch ID + actions */}
+          <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center justify-between">
+            <div>
+              <span className="text-xs text-gray-500">Batch ID: </span>
+              <span className="text-sm font-mono font-semibold text-gray-800">{batchResult.batch_id}</span>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={exportResults} className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 rounded-lg px-3 py-2 text-xs font-medium hover:bg-gray-50">
+                <Download className="w-3.5 h-3.5" /> Export Results
+              </button>
+              <button onClick={reset} className="flex items-center gap-2 bg-blue-600 text-white rounded-lg px-3 py-2 text-xs font-medium hover:bg-blue-700">
+                <Upload className="w-3.5 h-3.5" /> New Batch
+              </button>
+            </div>
+          </div>
+
+          {/* Per-row results table */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-700">Row-by-Row Results</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">#</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Name</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Email</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Address</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Status</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {batchResult.results.map(r => (
+                    <tr key={r.row} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-gray-400 text-xs">{r.row}</td>
+                      <td className="px-4 py-3 font-medium text-gray-800">{r.full_name}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">{r.email}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs max-w-xs truncate">{r.address}</td>
+                      <td className="px-4 py-3">
+                        {r.status === 'sent' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                            <CheckCircle2 className="w-3 h-3" /> Sent
+                          </span>
+                        ) : r.status === 'link_generated' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                            <Copy className="w-3 h-3" /> Link Only
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+                            <XCircle className="w-3 h-3" /> Skipped
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => setSelectedRow(selectedRow?.row === r.row ? null : r)}
+                          className="text-blue-600 hover:text-blue-800 text-xs font-medium flex items-center gap-1"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Row detail panel */}
+          {selectedRow && (
+            <div className="bg-white rounded-xl p-5 shadow-sm border border-blue-200">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-gray-800">Row {selectedRow.row} — {selectedRow.full_name}</h4>
+                <button onClick={() => setSelectedRow(null)} className="text-gray-400 hover:text-gray-600 text-lg leading-none">&times;</button>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-gray-500">Email:</span> <span className="text-gray-800">{selectedRow.email}</span></div>
+                <div><span className="text-gray-500">Address:</span> <span className="text-gray-800">{selectedRow.address}</span></div>
+                <div><span className="text-gray-500">Email sent:</span> <span className={selectedRow.email_sent ? 'text-green-600 font-medium' : 'text-red-600'}>{selectedRow.email_sent ? 'Yes' : 'No'}</span></div>
+                <div><span className="text-gray-500">Token:</span> <span className="font-mono text-gray-800">{selectedRow.token || 'N/A'}</span></div>
+                {selectedRow.error && <div className="col-span-2"><span className="text-gray-500">Error:</span> <span className="text-red-600">{selectedRow.error}</span></div>}
+                {selectedRow.verify_link && (
+                  <div className="col-span-2">
+                    <span className="text-gray-500">Verify link:</span>
+                    <div className="mt-1 bg-gray-50 rounded p-2 text-xs font-mono text-blue-600 break-all">{selectedRow.verify_link}</div>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(selectedRow.verify_link)}
+                      className="mt-1.5 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                    >
+                      <Copy className="w-3 h-3" /> Copy link
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── API Keys Page ────────────────────────────────────────────────────────────
 function ApiKeysPage() {
   const [keys] = useState([
@@ -962,6 +1317,7 @@ function Sidebar({ page, setPage, orgName, onLogout }) {
   const nav = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'send', label: 'Send Verification', icon: Send },
+    { id: 'batch', label: 'Batch Upload', icon: Upload },
     { id: 'verifications', label: 'Verifications', icon: ClipboardList },
     { id: 'analytics', label: 'Analytics', icon: BarChart2 },
     { id: 'apikeys', label: 'API Keys', icon: Key },
@@ -1024,6 +1380,7 @@ export default function App() {
   const pages = {
     overview: <OverviewPage {...sharedProps} />,
     send: <SendVerificationPage orgName={user.org} />,
+    batch: <BatchUploadPage orgName={user.org} />,
     verifications: <VerificationsPage {...sharedProps} />,
     analytics: <AnalyticsPage {...sharedProps} />,
     apikeys: <ApiKeysPage />,
