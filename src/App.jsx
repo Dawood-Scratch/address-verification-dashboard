@@ -23,7 +23,8 @@ function normaliseVerification(v) {
   if (v.personal_info) {
     const ld = v.location_data || {}
     const vr = v.verification_results || {}
-    const rawStatus = vr.status || 'pending'
+    // Use verification_results.status first; fall back to top-level status (set when record is updated in-place)
+    const rawStatus = vr.status || v.status || 'pending'
     // Map backend status strings to dashboard status keys
     const statusMap = {
       verified: 'verified',
