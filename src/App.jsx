@@ -202,18 +202,21 @@ function StatusBadge({ status }) {
     review: 'bg-amber-100 text-amber-700',
     declined: 'bg-red-100 text-red-700',
     pending: 'bg-gray-100 text-gray-600',
+    not_found: 'bg-purple-100 text-purple-700',
   }
   const icons = {
     verified: <CheckCircle2 className="w-3 h-3" />,
     review: <AlertTriangle className="w-3 h-3" />,
     declined: <XCircle className="w-3 h-3" />,
     pending: <Clock className="w-3 h-3" />,
+    not_found: <MapPin className="w-3 h-3" />,
   }
   const label = {
     verified: 'Verified',
     review: 'Requires Review',
     declined: 'Declined',
     pending: 'Pending',
+    not_found: 'Address Not Found',
   }
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${map[status] || map.pending}`}>
@@ -694,6 +697,7 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
           <option value="verified">Verified</option>
           <option value="review">Requires Review</option>
           <option value="declined">Declined</option>
+          <option value="not_found">Address Not Found</option>
           <option value="pending">Pending</option>
         </select>
       </div>
