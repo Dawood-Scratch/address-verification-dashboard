@@ -579,14 +579,15 @@ function SendVerificationPage({ orgName }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">City *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">City / Area *</label>
               <input
                 required
                 value={form.city}
                 onChange={e => setForm({ ...form, city: e.target.value })}
-                placeholder="e.g. Ikeja"
+                placeholder="e.g. Lagos Island, Ikeja, Lekki, Victoria Island"
                 className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              <p className="text-xs text-gray-400 mt-1">Enter the area or district — not the street name. E.g. for 36 Marina, enter &ldquo;Lagos Island&rdquo; not &ldquo;Marina&rdquo;.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Postcode</label>
