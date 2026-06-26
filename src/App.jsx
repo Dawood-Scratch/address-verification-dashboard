@@ -446,6 +446,9 @@ function SendVerificationPage({ orgName }) {
   const [loading, setLoading] = useState(false)
   const [link, setLink] = useState('')
   const [emailSent, setEmailSent] = useState(false)
+  const [smsSent, setSmsSent] = useState(false)
+  const [deliveryChannel, setDeliveryChannel] = useState('')
+  const [deliveryMessage, setDeliveryMessage] = useState('')
   const [sendError, setSendError] = useState('')
 
   const handleSend = async (e) => {
@@ -470,6 +473,9 @@ function SendVerificationPage({ orgName }) {
       if (response.ok) {
         setLink(result.verify_link)
         setEmailSent(result.email_sent)
+        setSmsSent(result.sms_sent)
+        setDeliveryChannel(result.delivery_channel || '')
+        setDeliveryMessage(result.delivery_message || '')
         setSent(true)
       } else {
         setSendError(result.error || 'Failed to send verification request')
@@ -498,9 +504,14 @@ function SendVerificationPage({ orgName }) {
               <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
               Email sent to <strong>{form.email}</strong>
             </div>
+          ) : smsSent ? (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2.5 mb-4 text-sm text-green-700 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              SMS sent to <strong>{form.phone}</strong>
+            </div>
           ) : (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 mb-4 text-sm text-amber-700">
-              Email delivery unavailable — share the link below manually.
+              {deliveryMessage || 'Delivery failed — share the link below manually.'}
             </div>
           )}
           <div className="bg-gray-50 rounded-lg p-3 text-left mb-4">
@@ -515,7 +526,7 @@ function SendVerificationPage({ orgName }) {
               <Copy className="w-4 h-4" /> Copy Link
             </button>
             <button
-              onClick={() => { setSent(false); setForm({ name: '', email: '', phone: '', address: '', city: '', postcode: '' }) }}
+              onClick={() => { setSent(false); setSmsSent(false); setEmailSent(false); setDeliveryChannel(''); setDeliveryMessage(''); setForm({ name: '', email: '', phone: '', address: '', city: '', postcode: '' }) }}
               className="flex-1 bg-blue-600 text-white rounded-lg py-2.5 text-sm font-medium hover:bg-blue-700"
             >
               Send Another
@@ -552,9 +563,8 @@ function SendVerificationPage({ orgName }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email Address *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email Address <span className="text-gray-400 font-normal text-xs">(optional if phone provided)</span></label>
               <input
-                required
                 type="email"
                 value={form.email}
                 onChange={e => setForm({ ...form, email: e.target.value })}
@@ -563,13 +573,14 @@ function SendVerificationPage({ orgName }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number <span className="text-gray-400 font-normal text-xs">(optional if email provided)</span></label>
               <input
                 value={form.phone}
                 onChange={e => setForm({ ...form, phone: e.target.value })}
-                placeholder="+234 800 000 0000"
+                placeholder="e.g. 08012345678 or +2348012345678"
                 className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              <p className="text-xs text-gray-400 mt-1">At least one of email or phone is required.</p>
             </div>
             <div className="col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Registered Address *</label>
@@ -604,7 +615,7 @@ function SendVerificationPage({ orgName }) {
           </div>
 
           <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-700">
-            <strong>What happens next:</strong> The customer will receive a link via email. When they click it, they will see the consent screen and verify their location in one tap.
+            <strong>What happens next:</strong> The customer will receive a verification link via <strong>email</strong> (if provided) or <strong>SMS</strong> (if phone only). When they tap the link, they will see the consent screen and verify their location in one tap.
           </div>
 
           <button
@@ -911,9 +922,11 @@ function BatchUploadPage({ orgName }) {
 
   const downloadTemplate = () => {
     const headers = 'full_name,email,phone,address,city,postcode'
+    const note = '# NOTE: email and phone are both optional but at least one is required per row'
     const example1 = 'James Okafor,james@example.com,+2348012345678,12 Broad Street,Lagos Island,101001'
-    const example2 = 'Amina Bello,amina@example.com,+2348098765432,5 Ahmadu Bello Way,Abuja,900001'
-    const csv = [headers, example1, example2].join('\n')
+    const example2 = 'Amina Bello,,+2348098765432,5 Ahmadu Bello Way,Abuja,900001'
+    const example3 = 'Chidi Okeke,chidi@example.com,,45 Allen Avenue,Ikeja,100281'
+    const csv = [note, headers, example1, example2, example3].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url; a.download = 'verifynow_batch_template.csv'; a.click()
