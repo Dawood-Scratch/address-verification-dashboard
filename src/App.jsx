@@ -1461,3 +1461,4 @@ export default function App() {
     </div>
   )
 }
+// GPS column + CSV export fix Fri Jun 26 12:35:07 UTC 2026
