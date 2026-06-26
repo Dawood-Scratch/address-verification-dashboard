@@ -726,13 +726,12 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
           <table className="w-full text-sm table-fixed">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[18%]">Customer</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell w-[24%]">Address</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[14%]">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell w-[9%]">Distance</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell w-[10%]">Risk</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell w-[15%]">GPS Coords</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[8%]">Date</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[20%]">Customer</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell w-[30%]">Address</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[16%]">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell w-[10%]">Distance</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell w-[12%]">Risk</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[10%]">Date</th>
                 <th className="px-4 py-3 w-[6%]"></th>
               </tr>
             </thead>
@@ -760,13 +759,6 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
                         <span className="text-xs text-gray-500">{(v.risk * 100).toFixed(0)}%</span>
                       </div>
                     ) : '—'}
-                  </td>
-                  <td className="px-4 py-3.5 hidden lg:table-cell">
-                    {v.userCoords ? (
-                      <span className="font-mono text-xs text-gray-600 break-all">
-                        {v.userCoords.latitude?.toFixed(5)},<br/>{v.userCoords.longitude?.toFixed(5)}
-                      </span>
-                    ) : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-3.5 text-gray-400 text-xs">
                     {new Date(v.timestamp).toLocaleDateString()}
