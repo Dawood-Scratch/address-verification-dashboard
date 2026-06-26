@@ -723,7 +723,8 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? <LoadingSpinner message="Loading verifications..." /> : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Customer</th>
@@ -731,7 +732,7 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Distance</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Risk</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden xl:table-cell">GPS Coordinates</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">GPS Coordinates</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
                 <th className="px-5 py-3"></th>
               </tr>
@@ -761,7 +762,7 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
                       </div>
                     ) : '—'}
                   </td>
-                  <td className="px-5 py-3.5 hidden xl:table-cell">
+                  <td className="px-5 py-3.5 hidden lg:table-cell">
                     {v.userCoords ? (
                       <span className="font-mono text-xs text-gray-600">
                         {v.userCoords.latitude?.toFixed(6)}, {v.userCoords.longitude?.toFixed(6)}
@@ -783,6 +784,7 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
               ))}
             </tbody>
           </table>
+          </div>
         )}
         {!loading && filtered.length === 0 && (
           <div className="text-center py-12 text-gray-400 text-sm">
