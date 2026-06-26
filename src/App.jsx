@@ -796,7 +796,38 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
                 <div className="flex justify-between"><span className="text-gray-500">Consent</span><span className={selected.consentProvided ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>{selected.consentProvided ? 'Provided' : 'Not provided'}</span></div>
               )}
               {selected.userCoords && (
-                <div className="flex justify-between"><span className="text-gray-500">GPS</span><span className="text-gray-800 font-mono text-xs">{selected.userCoords.latitude?.toFixed(5)}, {selected.userCoords.longitude?.toFixed(5)}</span></div>
+                <>
+                  <hr className="border-gray-100" />
+                  <div className="text-xs font-semibold text-gray-400 uppercase tracking-wide">GPS Data</div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">User Location</span>
+                    <span className="text-gray-800 font-mono text-xs">{selected.userCoords.latitude?.toFixed(6)}, {selected.userCoords.longitude?.toFixed(6)}</span>
+                  </div>
+                  {selected.userCoords.accuracy != null && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">GPS Accuracy</span>
+                      <span className="text-gray-800 text-xs">±{Math.round(selected.userCoords.accuracy)}m</span>
+                    </div>
+                  )}
+                  {selected.addressCoords && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500">Geocoded Address</span>
+                      <span className="text-gray-800 font-mono text-xs">{selected.addressCoords.latitude?.toFixed(6)}, {selected.addressCoords.longitude?.toFixed(6)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">View on Map</span>
+                    <a
+                      href={`https://www.google.com/maps?q=${selected.userCoords.latitude},${selected.userCoords.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 text-xs underline hover:text-blue-800"
+                    >
+                      Open in Google Maps
+                    </a>
+                  </div>
+                  <hr className="border-gray-100" />
+                </>
               )}
               <div className="flex justify-between"><span className="text-gray-500">Timestamp</span><span className="text-gray-800">{new Date(selected.timestamp).toLocaleString()}</span></div>
             </div>
