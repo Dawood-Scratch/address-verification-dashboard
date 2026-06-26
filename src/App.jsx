@@ -35,9 +35,10 @@ function normaliseVerification(v) {
     }
     return {
       id: String(v.id),
-      customer: v.personal_info.full_name || '—',
-      email: v.personal_info.email || '',
-      address: v.personal_info.address || '',
+      customer: v.personal_info.full_name || v.customer?.name || '—',
+      email: v.personal_info.email || v.customer?.email || '',
+      phone: v.personal_info.phone || v.customer?.phone || '',
+      address: v.personal_info.address || v.customer?.address || '',
       status: statusMap[rawStatus] || 'pending',
       risk: vr.risk_score ?? null,
       distance: ld.distance_meters != null ? Math.round(ld.distance_meters) : null,
@@ -55,6 +56,7 @@ function normaliseVerification(v) {
       id: v.id || '—',
       customer: v.customer.name || '—',
       email: v.customer.email || '',
+      phone: v.customer.phone || '',
       address: v.customer.address || '',
       status: v.status || 'pending',
       risk: null,
@@ -646,10 +648,16 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
   })
 
   const exportCSV = () => {
-    const headers = ['ID', 'Customer', 'Email', 'Address', 'Status', 'Risk Score', 'Distance (m)', 'Timestamp']
+    const headers = ['ID', 'Customer', 'Email', 'Phone', 'Address', 'Status', 'Risk Score', 'Distance (m)', 'GPS Latitude', 'GPS Longitude', 'GPS Accuracy (m)', 'Geocoded Lat', 'Geocoded Lon', 'Timestamp']
     const rows = filtered.map(v => [
-      v.id, v.customer, v.email, v.address, v.status,
-      v.risk ?? 'N/A', v.distance ?? 'N/A',
+      v.id, v.customer, v.email || '', v.phone || '', v.address, v.status,
+      v.risk != null ? (v.risk * 100).toFixed(0) + '%' : 'N/A',
+      v.distance ?? 'N/A',
+      v.userCoords?.latitude?.toFixed(6) ?? 'N/A',
+      v.userCoords?.longitude?.toFixed(6) ?? 'N/A',
+      v.userCoords?.accuracy != null ? Math.round(v.userCoords.accuracy) : 'N/A',
+      v.addressCoords?.latitude?.toFixed(6) ?? 'N/A',
+      v.addressCoords?.longitude?.toFixed(6) ?? 'N/A',
       new Date(v.timestamp).toLocaleString()
     ])
     const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n')
@@ -723,6 +731,7 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Distance</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Risk</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden xl:table-cell">GPS Coordinates</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
                 <th className="px-5 py-3"></th>
               </tr>
@@ -751,6 +760,13 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
                         <span className="text-xs text-gray-500">{(v.risk * 100).toFixed(0)}%</span>
                       </div>
                     ) : '—'}
+                  </td>
+                  <td className="px-5 py-3.5 hidden xl:table-cell">
+                    {v.userCoords ? (
+                      <span className="font-mono text-xs text-gray-600">
+                        {v.userCoords.latitude?.toFixed(6)}, {v.userCoords.longitude?.toFixed(6)}
+                      </span>
+                    ) : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-5 py-3.5 text-gray-400 text-xs">
                     {new Date(v.timestamp).toLocaleDateString()}
