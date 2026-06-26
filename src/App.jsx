@@ -723,36 +723,35 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? <LoadingSpinner message="Loading verifications..." /> : (
-          <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+          <table className="w-full text-sm table-fixed">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Customer</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Address</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Distance</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Risk</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">GPS Coordinates</th>
-                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Date</th>
-                <th className="px-5 py-3"></th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[18%]">Customer</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell w-[24%]">Address</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[14%]">Status</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell w-[9%]">Distance</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell w-[10%]">Risk</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell w-[15%]">GPS Coords</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[8%]">Date</th>
+                <th className="px-4 py-3 w-[6%]"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.map(v => (
                 <tr key={v.id} className="hover:bg-gray-50">
-                  <td className="px-5 py-3.5">
-                    <div className="font-medium text-gray-800">{v.customer}</div>
+                  <td className="px-4 py-3.5">
+                    <div className="font-medium text-gray-800 text-xs leading-snug">{v.customer}</div>
                     <div className="text-xs text-gray-400">{v.id}</div>
                   </td>
-                  <td className="px-5 py-3.5 text-gray-500 hidden md:table-cell max-w-xs truncate">{v.address}</td>
-                  <td className="px-5 py-3.5"><StatusBadge status={v.status} /></td>
-                  <td className="px-5 py-3.5 text-gray-500 hidden lg:table-cell">
+                  <td className="px-4 py-3.5 text-gray-500 hidden md:table-cell text-xs leading-snug break-words">{v.address}</td>
+                  <td className="px-4 py-3.5"><StatusBadge status={v.status} /></td>
+                  <td className="px-4 py-3.5 text-gray-500 hidden lg:table-cell text-xs">
                     {v.distance !== null ? `${v.distance}m` : '—'}
                   </td>
-                  <td className="px-5 py-3.5 hidden lg:table-cell">
+                  <td className="px-4 py-3.5 hidden lg:table-cell">
                     {v.risk !== null ? (
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                      <div className="flex items-center gap-1">
+                        <div className="w-10 h-1.5 bg-gray-200 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${v.risk < 0.4 ? 'bg-green-500' : v.risk < 0.7 ? 'bg-amber-500' : 'bg-red-500'}`}
                             style={{ width: `${v.risk * 100}%` }}
@@ -762,20 +761,20 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
                       </div>
                     ) : '—'}
                   </td>
-                  <td className="px-5 py-3.5 hidden lg:table-cell">
+                  <td className="px-4 py-3.5 hidden lg:table-cell">
                     {v.userCoords ? (
-                      <span className="font-mono text-xs text-gray-600">
-                        {v.userCoords.latitude?.toFixed(6)}, {v.userCoords.longitude?.toFixed(6)}
+                      <span className="font-mono text-xs text-gray-600 break-all">
+                        {v.userCoords.latitude?.toFixed(5)},<br/>{v.userCoords.longitude?.toFixed(5)}
                       </span>
                     ) : <span className="text-gray-300">—</span>}
                   </td>
-                  <td className="px-5 py-3.5 text-gray-400 text-xs">
+                  <td className="px-4 py-3.5 text-gray-400 text-xs">
                     {new Date(v.timestamp).toLocaleDateString()}
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-4 py-3.5">
                     <button
                       onClick={() => setSelected(v)}
-                      className="text-blue-600 hover:text-blue-800 text-xs font-medium flex items-center gap-1"
+                      className="text-blue-600 hover:text-blue-800 text-xs font-medium flex items-center gap-1 whitespace-nowrap"
                     >
                       <Eye className="w-3.5 h-3.5" /> View
                     </button>
@@ -784,7 +783,6 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
               ))}
             </tbody>
           </table>
-          </div>
         )}
         {!loading && filtered.length === 0 && (
           <div className="text-center py-12 text-gray-400 text-sm">
