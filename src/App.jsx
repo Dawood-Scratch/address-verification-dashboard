@@ -140,22 +140,25 @@ function computePieData(verifications) {
 }
 
 // ─── Data Hook ────────────────────────────────────────────────────────────────
-function useVerifications() {
+function useVerifications(token) {
   const [verifications, setVerifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
 
   const load = useCallback(async () => {
+    if (!token) return
     setLoading(true)
     setError(null)
     try {
-      const resp = await fetch(`${API_BASE_URL}/api/verifications`)
+      const resp = await fetch(`${API_BASE_URL}/api/verifications`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (resp.status === 401) { setError('Session expired — please sign in again.'); return }
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const data = await resp.json()
       const raw = Array.isArray(data) ? data : (data.verifications || [])
       const normalised = raw.map(normaliseVerification)
-      // Sort newest first
       normalised.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
       setVerifications(normalised)
       setLastRefresh(new Date())
@@ -164,11 +167,10 @@ function useVerifications() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [token])
 
   useEffect(() => {
     load()
-    // Auto-refresh every 30 seconds
     const interval = setInterval(load, 30000)
     return () => clearInterval(interval)
   }, [load])
@@ -255,22 +257,46 @@ function ErrorBanner({ message, onRetry }) {
 
 // ─── Auth Screen ──────────────────────────────────────────────────────────────
 function LoginScreen({ onLogin }) {
-  const [form, setForm] = useState({ org: '', email: '', password: '' })
+  const [mode, setMode] = useState('login') // 'login' | 'register'
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!form.org || !form.email || !form.password) {
-      setError('Please fill in all fields.')
-      return
+    setError('')
+    if (mode === 'register') {
+      if (!form.name || !form.email || !form.password) { setError('All fields are required.'); return }
+      if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return }
+      if (form.password.length < 8) { setError('Password must be at least 8 characters.'); return }
+    } else {
+      if (!form.email || !form.password) { setError('Email and password are required.'); return }
     }
     setLoading(true)
-    setTimeout(() => {
+    try {
+      const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login'
+      const body = mode === 'register'
+        ? { name: form.name, email: form.email, password: form.password }
+        : { email: form.email, password: form.password }
+      const resp = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      const data = await resp.json()
+      if (!resp.ok) { setError(data.error || 'Authentication failed'); return }
+      // Store JWT in localStorage for persistence
+      localStorage.setItem('vn_token', data.token)
+      localStorage.setItem('vn_org', JSON.stringify(data.org))
+      onLogin({ token: data.token, org: data.org })
+    } catch (err) {
+      setError('Network error — could not reach the server')
+    } finally {
       setLoading(false)
-      onLogin({ org: form.org, email: form.email })
-    }, 1000)
+    }
   }
+
+  const switchMode = () => { setMode(m => m === 'login' ? 'register' : 'login'); setError('') }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 flex items-center justify-center p-4">
@@ -280,29 +306,36 @@ function LoginScreen({ onLogin }) {
             <Shield className="w-8 h-8 text-blue-700" />
           </div>
           <h1 className="text-3xl font-bold text-white">VerifyNow</h1>
-          <p className="text-blue-200 mt-1">Client Dashboard</p>
+          <p className="text-blue-200 mt-1">Address Verification Platform</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h2 className="text-xl font-semibold text-gray-800 mb-6">Sign in to your account</h2>
+          <h2 className="text-xl font-semibold text-gray-800 mb-1">
+            {mode === 'login' ? 'Sign in to your account' : 'Create your organisation'}
+          </h2>
+          <p className="text-sm text-gray-400 mb-6">
+            {mode === 'login' ? 'Welcome back — enter your credentials below.' : 'Set up a new VerifyNow account for your organisation.'}
+          </p>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm mb-4">
-              {error}
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm mb-4 flex items-center gap-2">
+              <XCircle className="w-4 h-4 flex-shrink-0" />{error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Organisation Name</label>
-              <input
-                type="text"
-                placeholder="e.g. ABC Bank"
-                value={form.org}
-                onChange={e => setForm({ ...form, org: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+            {mode === 'register' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Organisation Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. First Bank Nigeria"
+                  value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
               <input
@@ -323,14 +356,41 @@ function LoginScreen({ onLogin }) {
                 className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+            {mode === 'register' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={form.confirmPassword}
+                  onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            )}
             <button
               type="submit"
               disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-60 mt-2"
             >
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</> : 'Sign In'}
+              {loading
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> {mode === 'login' ? 'Signing in...' : 'Creating account...'}</>
+                : (mode === 'login' ? 'Sign In' : 'Create Account')
+              }
             </button>
           </form>
+
+          <div className="mt-6 pt-5 border-t border-gray-100 text-center text-sm">
+            {mode === 'login' ? (
+              <span className="text-gray-500">Don&apos;t have an account?{' '}
+                <button onClick={switchMode} className="text-blue-600 font-medium hover:underline">Register your organisation</button>
+              </span>
+            ) : (
+              <span className="text-gray-500">Already have an account?{' '}
+                <button onClick={switchMode} className="text-blue-600 font-medium hover:underline">Sign in</button>
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -442,7 +502,7 @@ function OverviewPage({ verifications, loading, error, refresh }) {
 }
 
 // ─── Send Verification Page ───────────────────────────────────────────────────
-function SendVerificationPage({ orgName }) {
+function SendVerificationPage({ orgName, token }) {
   const [form, setForm] = useState({ name: '', email: '', phone: '', address: '', city: '', postcode: '' })
   const [sent, setSent] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -460,12 +520,14 @@ function SendVerificationPage({ orgName }) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/send-verification`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           customerName: form.name,
           customerEmail: form.email,
           phone: form.phone,
-          orgName: orgName,
           address: form.address,
           city: form.city,
           postcode: form.postcode
@@ -727,12 +789,12 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[20%]">Customer</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell w-[30%]">Address</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell w-[28%]">Address</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[16%]">Status</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell w-[10%]">Distance</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell w-[12%]">Risk</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide w-[10%]">Date</th>
-                <th className="px-4 py-3 w-[6%]"></th>
+                <th className="px-4 py-3 w-[8%]"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -938,7 +1000,7 @@ function AnalyticsPage({ verifications, loading }) {
 }
 
 // ─── Batch Upload Page ───────────────────────────────────────────────────────
-function BatchUploadPage({ orgName }) {
+function BatchUploadPage({ orgName, token }) {
   const [step, setStep] = useState('upload') // 'upload' | 'processing' | 'results'
   const [file, setFile] = useState(null)
   const [dragOver, setDragOver] = useState(false)
@@ -952,12 +1014,15 @@ function BatchUploadPage({ orgName }) {
 
   // Load previous batches on mount
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/batches`)
+    if (!token) return
+    fetch(`${API_BASE_URL}/api/batches`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
       .then(r => r.json())
       .then(d => setBatches(d.batches || []))
       .catch(() => {})
       .finally(() => setLoadingBatches(false))
-  }, [])
+  }, [token])
 
   const downloadTemplate = () => {
     const headers = 'full_name,email,phone,address,city,postcode'
@@ -996,9 +1061,9 @@ function BatchUploadPage({ orgName }) {
     try {
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('orgName', orgName)
       const resp = await fetch(`${API_BASE_URL}/api/batch-upload`, {
         method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       })
       const data = await resp.json()
@@ -1294,12 +1359,47 @@ function BatchUploadPage({ orgName }) {
 }
 
 // ─── API Keys Page ────────────────────────────────────────────────────────────
-function ApiKeysPage() {
-  const [keys] = useState([
-    { id: 1, name: 'Production Key', key: 'vfy_live_sk_••••••••••••••••••••••3f8a', created: '2026-01-15', lastUsed: '2026-06-21', active: true },
-    { id: 2, name: 'Test Key', key: 'vfy_test_sk_••••••••••••••••••••••9c2d', created: '2026-03-01', lastUsed: '2026-06-20', active: true },
-  ])
+function ApiKeysPage({ token }) {
+  const [keys, setKeys] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [newLabel, setNewLabel] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [newKey, setNewKey] = useState(null)
   const [copied, setCopied] = useState(null)
+  const [error, setError] = useState('')
+
+  const loadKeys = useCallback(async () => {
+    if (!token) return
+    try {
+      const r = await fetch(`${API_BASE_URL}/api/keys`, { headers: { 'Authorization': `Bearer ${token}` } })
+      const d = await r.json()
+      setKeys(d.keys || [])
+    } catch {}
+    finally { setLoading(false) }
+  }, [token])
+
+  useEffect(() => { loadKeys() }, [loadKeys])
+
+  const createKey = async () => {
+    setCreating(true); setError('')
+    try {
+      const r = await fetch(`${API_BASE_URL}/api/keys`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ label: newLabel || 'API Key' })
+      })
+      const d = await r.json()
+      if (!r.ok) { setError(d.error || 'Failed to create key'); return }
+      setNewKey(d.key); setNewLabel(''); loadKeys()
+    } catch { setError('Network error') }
+    finally { setCreating(false) }
+  }
+
+  const revokeKey = async (id) => {
+    if (!confirm('Revoke this API key? This cannot be undone.')) return
+    await fetch(`${API_BASE_URL}/api/keys/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } })
+    loadKeys()
+  }
 
   const copy = (id, val) => {
     navigator.clipboard.writeText(val)
@@ -1309,60 +1409,81 @@ function ApiKeysPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">API Keys</h2>
-          <p className="text-sm text-gray-500 mt-0.5">Manage your API credentials for system integration</p>
-        </div>
-        <button className="flex items-center gap-2 bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700">
-          <Plus className="w-4 h-4" /> Generate New Key
-        </button>
+      <div>
+        <h2 className="text-xl font-bold text-gray-900">API Keys</h2>
+        <p className="text-sm text-gray-500 mt-0.5">Manage your API credentials for system integration</p>
       </div>
 
-      <div className="space-y-4">
-        {keys.map(k => (
+      {/* Create new key */}
+      <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Generate New Key</h3>
+        {error && <div className="text-red-600 text-xs mb-2">{error}</div>}
+        {newKey && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+            <p className="text-xs font-semibold text-amber-700 mb-1">Copy this key now — it will not be shown again.</p>
+            <div className="flex items-center gap-2">
+              <code className="text-xs font-mono text-gray-800 flex-1 break-all">{newKey}</code>
+              <button onClick={() => copy('new', newKey)} className="text-blue-600 text-xs font-medium flex items-center gap-1 whitespace-nowrap">
+                <Copy className="w-3.5 h-3.5" />{copied === 'new' ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="flex gap-2">
+          <input
+            value={newLabel}
+            onChange={e => setNewLabel(e.target.value)}
+            placeholder="Key label (e.g. Production)"
+            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button onClick={createKey} disabled={creating}
+            className="flex items-center gap-2 bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-60">
+            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Generate
+          </button>
+        </div>
+      </div>
+
+      {/* Key list */}
+      <div className="space-y-3">
+        {loading ? <LoadingSpinner message="Loading keys..." /> : keys.length === 0 ? (
+          <div className="text-center py-10 text-gray-400 text-sm bg-white rounded-xl border border-gray-100">No API keys yet. Generate one above.</div>
+        ) : keys.map(k => (
           <div key={k.id} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Key className="w-4 h-4 text-blue-600" />
-                </div>
+                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center"><Key className="w-4 h-4 text-blue-600" /></div>
                 <div>
-                  <div className="font-semibold text-gray-800 text-sm">{k.name}</div>
-                  <div className="text-xs text-gray-400">Created {k.created} · Last used {k.lastUsed}</div>
+                  <div className="font-semibold text-gray-800 text-sm">{k.label}</div>
+                  <div className="text-xs text-gray-400">Created {new Date(k.created_at).toLocaleDateString()}{k.last_used && ` · Last used ${new Date(k.last_used).toLocaleDateString()}`}</div>
                 </div>
               </div>
-              <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${k.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                {k.active ? 'Active' : 'Inactive'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${k.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                  {k.is_active ? 'Active' : 'Revoked'}
+                </span>
+                {k.is_active && <button onClick={() => revokeKey(k.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Revoke</button>}
+              </div>
             </div>
             <div className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-2.5">
-              <code className="text-xs text-gray-600 flex-1 font-mono">{k.key}</code>
-              <button
-                onClick={() => copy(k.id, k.key)}
-                className="text-blue-600 hover:text-blue-800 text-xs font-medium flex items-center gap-1"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                {copied === k.id ? 'Copied!' : 'Copy'}
-              </button>
+              <code className="text-xs text-gray-600 flex-1 font-mono">{k.key_prefix}</code>
             </div>
           </div>
         ))}
       </div>
 
+      {/* Integration example */}
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Quick Integration Example</h3>
         <pre className="bg-gray-900 text-green-400 rounded-lg p-4 text-xs overflow-x-auto">
 {`curl -X POST ${API_BASE_URL}/api/send-verification \\
   -H "Content-Type: application/json" \\
-  -H "X-API-Key: vfy_live_sk_your_key_here" \\
+  -H "X-API-Key: vn_your_key_here" \\
   -d '{
     "customerName": "James Okafor",
     "customerEmail": "james@example.com",
     "address": "45b Palm Avenue",
     "city": "Ikeja",
-    "postcode": "100281",
-    "orgName": "Your Organisation"
+    "postcode": "100281"
   }'`}
         </pre>
       </div>
@@ -1427,30 +1548,44 @@ function Sidebar({ page, setPage, orgName, onLogout }) {
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState(() => {
+    try {
+      const token = localStorage.getItem('vn_token')
+      const org = JSON.parse(localStorage.getItem('vn_org') || 'null')
+      if (token && org) return { token, org }
+    } catch {}
+    return null
+  })
   const [page, setPage] = useState('overview')
-  const { verifications, loading, error, refresh, lastRefresh } = useVerifications()
+  const token = user?.token || null
+  const { verifications, loading, error, refresh, lastRefresh } = useVerifications(token)
+
+  const handleLogout = () => {
+    localStorage.removeItem('vn_token')
+    localStorage.removeItem('vn_org')
+    setUser(null)
+  }
 
   if (!user) return <LoginScreen onLogin={setUser} />
 
+  const orgName = user.org?.name || ''
   const sharedProps = { verifications, loading, error, refresh, lastRefresh }
 
   const pages = {
     overview: <OverviewPage {...sharedProps} />,
-    send: <SendVerificationPage orgName={user.org} />,
-    batch: <BatchUploadPage orgName={user.org} />,
+    send: <SendVerificationPage orgName={orgName} token={token} />,
+    batch: <BatchUploadPage orgName={orgName} token={token} />,
     verifications: <VerificationsPage {...sharedProps} />,
     analytics: <AnalyticsPage {...sharedProps} />,
-    apikeys: <ApiKeysPage />,
+    apikeys: <ApiKeysPage token={token} />,
   }
 
   return (
     <div className="flex h-screen bg-slate-50">
-      <Sidebar page={page} setPage={setPage} orgName={user.org} onLogout={() => setUser(null)} />
+      <Sidebar page={page} setPage={setPage} orgName={orgName} onLogout={handleLogout} />
       <main className="flex-1 overflow-y-auto p-6">
         {pages[page]}
       </main>
     </div>
   )
 }
-// GPS column + CSV export fix Fri Jun 26 12:35:07 UTC 2026
