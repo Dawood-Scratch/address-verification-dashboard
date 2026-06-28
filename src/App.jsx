@@ -218,7 +218,7 @@ function StatusBadge({ status }) {
   }
   const label = {
     verified: 'Verified',
-    review: 'Requires Review',
+    review: 'Review',
     declined: 'Declined',
     pending: 'Pending',
     not_found: 'Address Not Found',
