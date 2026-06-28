@@ -4,7 +4,8 @@ import {
   Key, LogOut, CheckCircle2, XCircle, Clock, AlertTriangle,
   Search, Download, RefreshCw, Plus, Eye, Copy, ChevronDown,
   MapPin, Shield, TrendingUp, Users, Activity, Loader2,
-  Upload, FileSpreadsheet, FileText, ChevronRight, AlertCircle
+  Upload, FileSpreadsheet, FileText, ChevronRight, AlertCircle,
+  UserCog, ShieldCheck, ShieldAlert, UserPlus, Trash2, CheckCheck, Ban, ClipboardCheck
 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts'
 
@@ -257,14 +258,36 @@ function ErrorBanner({ message, onRetry }) {
 
 // ─── Auth Screen ──────────────────────────────────────────────────────────────
 function LoginScreen({ onLogin }) {
+  const [tab, setTab] = useState('org') // 'org' | 'member'
   const [mode, setMode] = useState('login') // 'login' | 'register'
-  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' })
+  const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '', orgId: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+
+    if (tab === 'member') {
+      if (!form.orgId || !form.email || !form.password) { setError('Organisation ID, email and password are required.'); return }
+      setLoading(true)
+      try {
+        const resp = await fetch(`${API_BASE_URL}/api/auth/member-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ org_id: form.orgId, email: form.email, password: form.password })
+        })
+        const data = await resp.json()
+        if (!resp.ok) { setError(data.error || 'Authentication failed'); return }
+        localStorage.setItem('vn_token', data.token)
+        localStorage.setItem('vn_org', JSON.stringify({ id: data.member.org_id, name: data.member.org_name }))
+        localStorage.setItem('vn_member', JSON.stringify(data.member))
+        onLogin({ token: data.token, org: { id: data.member.org_id, name: data.member.org_name }, member: data.member })
+      } catch { setError('Network error — could not reach the server') }
+      finally { setLoading(false) }
+      return
+    }
+
     if (mode === 'register') {
       if (!form.name || !form.email || !form.password) { setError('All fields are required.'); return }
       if (form.password !== form.confirmPassword) { setError('Passwords do not match.'); return }
@@ -285,10 +308,10 @@ function LoginScreen({ onLogin }) {
       })
       const data = await resp.json()
       if (!resp.ok) { setError(data.error || 'Authentication failed'); return }
-      // Store JWT in localStorage for persistence
       localStorage.setItem('vn_token', data.token)
       localStorage.setItem('vn_org', JSON.stringify(data.org))
-      onLogin({ token: data.token, org: data.org })
+      localStorage.removeItem('vn_member')
+      onLogin({ token: data.token, org: data.org, member: null })
     } catch (err) {
       setError('Network error — could not reach the server')
     } finally {
@@ -309,88 +332,119 @@ function LoginScreen({ onLogin }) {
           <p className="text-blue-200 mt-1">Address Verification Platform</p>
         </div>
 
+        {/* Login type tabs */}
+        <div className="flex bg-white/10 rounded-xl p-1 mb-4">
+          <button onClick={() => { setTab('org'); setError('') }}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'org' ? 'bg-white text-blue-700 shadow' : 'text-white/80 hover:text-white'}`}>
+            Organisation Admin
+          </button>
+          <button onClick={() => { setTab('member'); setError('') }}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${tab === 'member' ? 'bg-white text-blue-700 shadow' : 'text-white/80 hover:text-white'}`}>
+            Team Member
+          </button>
+        </div>
+
         <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h2 className="text-xl font-semibold text-gray-800 mb-1">
-            {mode === 'login' ? 'Sign in to your account' : 'Create your organisation'}
-          </h2>
-          <p className="text-sm text-gray-400 mb-6">
-            {mode === 'login' ? 'Welcome back — enter your credentials below.' : 'Set up a new VerifyNow account for your organisation.'}
-          </p>
+          {tab === 'member' ? (
+            <>
+              <h2 className="text-xl font-semibold text-gray-800 mb-1">Team Member Sign In</h2>
+              <p className="text-sm text-gray-400 mb-6">Sign in as a reviewer or supervisor. Your admin will provide your Organisation ID.</p>
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm mb-4 flex items-center gap-2">
+                  <XCircle className="w-4 h-4 flex-shrink-0" />{error}
+                </div>
+              )}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Organisation ID</label>
+                  <input type="text" placeholder="ORG-XXXXXXXX"
+                    value={form.orgId} onChange={e => setForm({ ...form, orgId: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                  <input type="email" placeholder="you@organisation.com"
+                    value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                  <input type="password" placeholder="••••••••"
+                    value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <button type="submit" disabled={loading}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-60 mt-2">
+                  {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</> : 'Sign In as Team Member'}
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <h2 className="text-xl font-semibold text-gray-800 mb-1">
+                {mode === 'login' ? 'Sign in to your account' : 'Create your organisation'}
+              </h2>
+              <p className="text-sm text-gray-400 mb-6">
+                {mode === 'login' ? 'Welcome back — enter your credentials below.' : 'Set up a new VerifyNow account for your organisation.'}
+              </p>
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm mb-4 flex items-center gap-2">
-              <XCircle className="w-4 h-4 flex-shrink-0" />{error}
-            </div>
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm mb-4 flex items-center gap-2">
+                  <XCircle className="w-4 h-4 flex-shrink-0" />{error}
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {mode === 'register' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Organisation Name</label>
+                    <input type="text" placeholder="e.g. First Bank Nigeria"
+                      value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                  <input type="email" placeholder="you@organisation.com"
+                    value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                  <input type="password" placeholder="••••••••"
+                    value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                {mode === 'register' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                    <input type="password" placeholder="••••••••"
+                      value={form.confirmPassword} onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
+                      className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                )}
+                <button type="submit" disabled={loading}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-60 mt-2">
+                  {loading
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> {mode === 'login' ? 'Signing in...' : 'Creating account...'}</>
+                    : (mode === 'login' ? 'Sign In' : 'Create Account')
+                  }
+                </button>
+              </form>
+
+              <div className="mt-6 pt-5 border-t border-gray-100 text-center text-sm">
+                {mode === 'login' ? (
+                  <span className="text-gray-500">Don&apos;t have an account?{' '}
+                    <button onClick={switchMode} className="text-blue-600 font-medium hover:underline">Register your organisation</button>
+                  </span>
+                ) : (
+                  <span className="text-gray-500">Already have an account?{' '}
+                    <button onClick={switchMode} className="text-blue-600 font-medium hover:underline">Sign in</button>
+                  </span>
+                )}
+              </div>
+            </>
           )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'register' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Organisation Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. First Bank Nigeria"
-                  value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            )}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
-              <input
-                type="email"
-                placeholder="you@organisation.com"
-                value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={form.password}
-                onChange={e => setForm({ ...form, password: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            {mode === 'register' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={form.confirmPassword}
-                  onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg text-sm flex items-center justify-center gap-2 disabled:opacity-60 mt-2"
-            >
-              {loading
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> {mode === 'login' ? 'Signing in...' : 'Creating account...'}</>
-                : (mode === 'login' ? 'Sign In' : 'Create Account')
-              }
-            </button>
-          </form>
-
-          <div className="mt-6 pt-5 border-t border-gray-100 text-center text-sm">
-            {mode === 'login' ? (
-              <span className="text-gray-500">Don&apos;t have an account?{' '}
-                <button onClick={switchMode} className="text-blue-600 font-medium hover:underline">Register your organisation</button>
-              </span>
-            ) : (
-              <span className="text-gray-500">Already have an account?{' '}
-                <button onClick={switchMode} className="text-blue-600 font-medium hover:underline">Sign in</button>
-              </span>
-            )}
-          </div>
         </div>
       </div>
     </div>
@@ -696,10 +750,11 @@ function SendVerificationPage({ orgName, token }) {
 }
 
 // ─── Verifications List Page ──────────────────────────────────────────────────
-function VerificationsPage({ verifications, loading, error, refresh, lastRefresh }) {
+function VerificationsPage({ verifications, loading, error, refresh, lastRefresh, token }) {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
   const [selected, setSelected] = useState(null)
+  const [overrideTarget, setOverrideTarget] = useState(null)
 
   const filtered = verifications.filter(v => {
     const matchSearch = v.customer.toLowerCase().includes(search.toLowerCase()) ||
@@ -901,8 +956,30 @@ function VerificationsPage({ verifications, loading, error, refresh, lastRefresh
               )}
               <div className="flex justify-between"><span className="text-gray-500">Timestamp</span><span className="text-gray-800">{new Date(selected.timestamp).toLocaleString()}</span></div>
             </div>
+
+            {/* Override Request button — only for completed verifications */}
+            {selected.status !== 'pending' && (
+              <div className="mt-5 pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => { setOverrideTarget(selected); setSelected(null) }}
+                  className="w-full flex items-center justify-center gap-2 border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg py-2.5 text-sm font-medium transition-colors"
+                >
+                  <ShieldAlert className="w-4 h-4" /> Request Status Override
+                </button>
+              </div>
+            )}
           </div>
         </div>
+      )}
+
+      {/* Override Request Modal */}
+      {overrideTarget && (
+        <OverrideRequestModal
+          verification={overrideTarget}
+          token={token}
+          onClose={() => setOverrideTarget(null)}
+          onSubmitted={() => { setOverrideTarget(null); refresh() }}
+        />
       )}
     </div>
   )
@@ -1491,15 +1568,434 @@ function ApiKeysPage({ token }) {
   )
 }
 
+
+// ─── Override Request Modal ───────────────────────────────────────────────────
+function OverrideRequestModal({ verification, token, onClose, onSubmitted }) {
+  const [proposedStatus, setProposedStatus] = useState('')
+  const [reason, setReason] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const statusOptions = [
+    { value: 'verified', label: 'Verified' },
+    { value: 'requires_review', label: 'Requires Review' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'address_not_found', label: 'Address Not Found' },
+    { value: 'declined', label: 'Declined' },
+  ].filter(o => o.value !== verification.status && o.value !== 'review')
+
+  const submit = async () => {
+    if (!proposedStatus) { setError('Please select a proposed status'); return }
+    if (!reason.trim()) { setError('Please provide a reason for the override'); return }
+    setLoading(true); setError('')
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/verifications/${verification.id}/override-request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ proposed_status: proposedStatus, reason: reason.trim() })
+      })
+      const data = await resp.json()
+      if (!resp.ok) { setError(data.error || 'Failed to submit request'); return }
+      onSubmitted()
+    } catch { setError('Network error') }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-amber-600" />
+            <h3 className="font-bold text-gray-900">Request Status Override</h3>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800 mb-4">
+          <strong>Supervisory approval required.</strong> Your request will be reviewed by a supervisor before the status changes.
+        </div>
+
+        <div className="space-y-3 text-sm mb-4">
+          <div className="flex justify-between"><span className="text-gray-500">Verification ID</span><span className="font-mono text-gray-800">{verification.id}</span></div>
+          <div className="flex justify-between"><span className="text-gray-500">Customer</span><span className="text-gray-800">{verification.customer}</span></div>
+          <div className="flex justify-between"><span className="text-gray-500">Current Status</span><StatusBadge status={verification.status} /></div>
+        </div>
+
+        {error && <div className="text-red-600 text-xs mb-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Proposed New Status</label>
+            <select value={proposedStatus} onChange={e => setProposedStatus(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="">Select a status...</option>
+              {statusOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reason for Override <span className="text-red-500">*</span></label>
+            <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3}
+              placeholder="Explain why this status change is needed (e.g. address confirmed via utility bill, GPS signal drift observed)..."
+              className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+          </div>
+        </div>
+
+        <div className="flex gap-3 mt-5">
+          <button onClick={onClose} className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2.5 text-sm font-medium hover:bg-gray-50">Cancel</button>
+          <button onClick={submit} disabled={loading}
+            className="flex-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg py-2.5 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60">
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardCheck className="w-4 h-4" />}
+            Submit Request
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+// ─── Approvals Page ───────────────────────────────────────────────────────────
+function ApprovalsPage({ token, role }) {
+  const [requests, setRequests] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState('pending_approval')
+  const [actionModal, setActionModal] = useState(null) // { req, action: 'approve'|'reject' }
+  const [note, setNote] = useState('')
+  const [acting, setActing] = useState(false)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const url = filter ? `${API_BASE_URL}/api/override-requests?status=${filter}` : `${API_BASE_URL}/api/override-requests`
+      const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+      const data = await resp.json()
+      setRequests(data.override_requests || [])
+    } catch {}
+    finally { setLoading(false) }
+  }, [token, filter])
+
+  useEffect(() => { load() }, [load])
+
+  const doAction = async () => {
+    if (!actionModal) return
+    if (actionModal.action === 'reject' && !note.trim()) { setError('A rejection note is required'); return }
+    setActing(true); setError('')
+    try {
+      const endpoint = `${API_BASE_URL}/api/override-requests/${actionModal.req.id}/${actionModal.action}`
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ note: note.trim() })
+      })
+      const data = await resp.json()
+      if (!resp.ok) { setError(data.error || 'Action failed'); return }
+      setActionModal(null); setNote(''); load()
+    } catch { setError('Network error') }
+    finally { setActing(false) }
+  }
+
+  const statusColors = {
+    pending_approval: 'bg-amber-100 text-amber-700',
+    approved: 'bg-green-100 text-green-700',
+    rejected: 'bg-red-100 text-red-700',
+  }
+  const statusLabels = { pending_approval: 'Pending', approved: 'Approved', rejected: 'Rejected' }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Override Requests</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Review and action manual status override requests</p>
+        </div>
+        <button onClick={load} className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-50 shadow-sm">
+          <RefreshCw className="w-4 h-4" /> Refresh
+        </button>
+      </div>
+
+      <div className="flex gap-2">
+        {[
+          { value: 'pending_approval', label: 'Pending' },
+          { value: 'approved', label: 'Approved' },
+          { value: 'rejected', label: 'Rejected' },
+          { value: '', label: 'All' },
+        ].map(f => (
+          <button key={f.value} onClick={() => setFilter(f.value)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${filter === f.value ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? <LoadingSpinner message="Loading override requests..." /> : requests.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-100 py-12 text-center text-gray-400 text-sm">
+          No override requests {filter === 'pending_approval' ? 'awaiting approval' : `with status "${filter || 'any'}"`}.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {requests.map(req => (
+            <div key={req.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="font-mono text-xs text-gray-500">{req.id}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusColors[req.status] || 'bg-gray-100 text-gray-600'}`}>
+                      {statusLabels[req.status] || req.status}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-800 mb-1">
+                    Verification <span className="font-mono font-medium">{req.verification_id}</span>
+                  </div>
+                  <div className="text-xs text-gray-500 mb-2">
+                    Requested by <strong>{req.requested_by_name}</strong> · {new Date(req.created_at).toLocaleString()}
+                  </div>
+                  <div className="flex items-center gap-3 text-xs mb-2">
+                    <span className="text-gray-500">From:</span>
+                    <StatusBadge status={req.current_status === 'requires_review' ? 'review' : req.current_status} />
+                    <span className="text-gray-400">→</span>
+                    <StatusBadge status={req.proposed_status === 'requires_review' ? 'review' : req.proposed_status} />
+                  </div>
+                  <div className="bg-gray-50 rounded-lg px-3 py-2 text-xs text-gray-700 italic">
+                    "{req.reason}"
+                  </div>
+                  {req.actioned_by_name && (
+                    <div className="mt-2 text-xs text-gray-500">
+                      {req.status === 'approved' ? 'Approved' : 'Rejected'} by <strong>{req.actioned_by_name}</strong> · {new Date(req.actioned_at).toLocaleString()}
+                      {req.rejection_note && <span className="ml-1 italic">— "{req.rejection_note}"</span>}
+                    </div>
+                  )}
+                </div>
+                {req.status === 'pending_approval' && role === 'admin' && (
+                  <div className="flex flex-col gap-2 flex-shrink-0">
+                    <button onClick={() => { setActionModal({ req, action: 'approve' }); setNote(''); setError('') }}
+                      className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg px-3 py-2 text-xs font-medium">
+                      <CheckCheck className="w-3.5 h-3.5" /> Approve
+                    </button>
+                    <button onClick={() => { setActionModal({ req, action: 'reject' }); setNote(''); setError('') }}
+                      className="flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg px-3 py-2 text-xs font-medium">
+                      <Ban className="w-3.5 h-3.5" /> Reject
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Action Modal */}
+      {actionModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={() => setActionModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-4">
+              {actionModal.action === 'approve'
+                ? <ShieldCheck className="w-5 h-5 text-green-600" />
+                : <ShieldAlert className="w-5 h-5 text-red-600" />}
+              <h3 className="font-bold text-gray-900">
+                {actionModal.action === 'approve' ? 'Approve Override' : 'Reject Override'}
+              </h3>
+            </div>
+
+            <div className="text-sm text-gray-600 mb-4">
+              {actionModal.action === 'approve'
+                ? <>This will immediately change <span className="font-mono font-medium">{actionModal.req.verification_id}</span> to <strong>{actionModal.req.proposed_status}</strong>.</>
+                : <>The override request for <span className="font-mono font-medium">{actionModal.req.verification_id}</span> will be rejected. The status will not change.</>}
+            </div>
+
+            {error && <div className="text-red-600 text-xs mb-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {actionModal.action === 'approve' ? 'Note (optional)' : 'Rejection reason *'}
+              </label>
+              <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
+                placeholder={actionModal.action === 'approve' ? 'Optional supervisor note...' : 'Explain why this request is being rejected...'}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => setActionModal(null)} className="flex-1 border border-gray-300 text-gray-700 rounded-lg py-2.5 text-sm font-medium hover:bg-gray-50">Cancel</button>
+              <button onClick={doAction} disabled={acting}
+                className={`flex-1 text-white rounded-lg py-2.5 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60 ${actionModal.action === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}>
+                {acting ? <Loader2 className="w-4 h-4 animate-spin" /> : (actionModal.action === 'approve' ? <CheckCheck className="w-4 h-4" /> : <Ban className="w-4 h-4" />)}
+                {actionModal.action === 'approve' ? 'Confirm Approval' : 'Confirm Rejection'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+// ─── Team Members Page ────────────────────────────────────────────────────────
+function TeamPage({ token }) {
+  const [members, setMembers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'member' })
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/members`, { headers: { 'Authorization': `Bearer ${token}` } })
+      const data = await resp.json()
+      setMembers(data.members || [])
+    } catch {}
+    finally { setLoading(false) }
+  }, [token])
+
+  useEffect(() => { load() }, [load])
+
+  const createMember = async () => {
+    if (!form.name || !form.email || !form.password) { setError('All fields are required'); return }
+    if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
+    setCreating(true); setError(''); setSuccess('')
+    try {
+      const resp = await fetch(`${API_BASE_URL}/api/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(form)
+      })
+      const data = await resp.json()
+      if (!resp.ok) { setError(data.error || 'Failed to create member'); return }
+      setSuccess(`${form.name} added successfully.`)
+      setForm({ name: '', email: '', password: '', role: 'member' })
+      setShowForm(false); load()
+    } catch { setError('Network error') }
+    finally { setCreating(false) }
+  }
+
+  const deactivate = async (id, name) => {
+    if (!confirm(`Deactivate ${name}? They will no longer be able to sign in.`)) return
+    await fetch(`${API_BASE_URL}/api/members/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } })
+    load()
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Team Members</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Manage reviewers and supervisors in your organisation</p>
+        </div>
+        <button onClick={() => { setShowForm(s => !s); setError(''); setSuccess('') }}
+          className="flex items-center gap-2 bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700 shadow-sm">
+          <UserPlus className="w-4 h-4" /> Add Member
+        </button>
+      </div>
+
+      {success && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg px-4 py-3 text-sm">{success}</div>}
+
+      {showForm && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">New Team Member</h3>
+          {error && <div className="text-red-600 text-xs mb-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Full Name</label>
+              <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+                placeholder="Amaka Obi" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+              <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
+                placeholder="amaka@company.com" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Password</label>
+              <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
+                placeholder="Min. 8 characters" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Role</label>
+              <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <option value="member">Reviewer (can request overrides)</option>
+                <option value="admin">Supervisor (can approve overrides)</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button onClick={() => setShowForm(false)} className="border border-gray-300 text-gray-600 rounded-lg px-4 py-2 text-sm font-medium hover:bg-gray-50">Cancel</button>
+            <button onClick={createMember} disabled={creating}
+              className="flex items-center gap-2 bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-60">
+              {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />} Add Member
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? <LoadingSpinner message="Loading team members..." /> : members.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-100 py-12 text-center text-gray-400 text-sm">
+          No team members yet. Add reviewers and supervisors above.
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Name</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Email</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Role</th>
+                <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Added</th>
+                <th className="px-5 py-3 w-20"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {members.map(m => (
+                <tr key={m.id} className="hover:bg-gray-50">
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold">
+                        {m.name.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="font-medium text-gray-800">{m.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3.5 text-gray-500">{m.email}</td>
+                  <td className="px-5 py-3.5">
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${m.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                      {m.role === 'admin' ? 'Supervisor' : 'Reviewer'}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5 text-gray-400 text-xs">{new Date(m.created_at).toLocaleDateString()}</td>
+                  <td className="px-5 py-3.5">
+                    {m.is_active && (
+                      <button onClick={() => deactivate(m.id, m.name)}
+                        className="text-red-400 hover:text-red-600 flex items-center gap-1 text-xs font-medium">
+                        <Trash2 className="w-3.5 h-3.5" /> Remove
+                      </button>
+                    )}
+                    {!m.is_active && <span className="text-xs text-gray-400 italic">Deactivated</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
-function Sidebar({ page, setPage, orgName, onLogout }) {
+function Sidebar({ page, setPage, orgName, role, pendingCount, onLogout }) {
   const nav = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'send', label: 'Send Verification', icon: Send },
     { id: 'batch', label: 'Batch Upload', icon: Upload },
     { id: 'verifications', label: 'Verifications', icon: ClipboardList },
+    { id: 'approvals', label: 'Override Requests', icon: ShieldAlert, badge: pendingCount },
     { id: 'analytics', label: 'Analytics', icon: BarChart2 },
     { id: 'apikeys', label: 'API Keys', icon: Key },
+    ...(role === 'admin' ? [{ id: 'team', label: 'Team Members', icon: UserCog }] : []),
   ]
 
   return (
@@ -1509,15 +2005,21 @@ function Sidebar({ page, setPage, orgName, onLogout }) {
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
             <Shield className="w-4 h-4 text-white" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="text-sm font-bold text-gray-900">VerifyNow</div>
             <div className="text-xs text-gray-400 truncate max-w-32">{orgName}</div>
           </div>
         </div>
+        {role && (
+          <div className={`mt-2 inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+            {role === 'admin' ? <ShieldCheck className="w-3 h-3" /> : <Users className="w-3 h-3" />}
+            {role === 'admin' ? 'Supervisor' : 'Reviewer'}
+          </div>
+        )}
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {nav.map(({ id, label, icon: Icon }) => (
+        {nav.map(({ id, label, icon: Icon, badge }) => (
           <button
             key={id}
             onClick={() => setPage(id)}
@@ -1527,8 +2029,13 @@ function Sidebar({ page, setPage, orgName, onLogout }) {
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
             }`}
           >
-            <Icon className="w-4 h-4" />
-            {label}
+            <Icon className="w-4 h-4 flex-shrink-0" />
+            <span className="flex-1 text-left">{label}</span>
+            {badge > 0 && (
+              <span className="bg-amber-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                {badge}
+              </span>
+            )}
           </button>
         ))}
       </nav>
@@ -1552,17 +2059,39 @@ export default function App() {
     try {
       const token = localStorage.getItem('vn_token')
       const org = JSON.parse(localStorage.getItem('vn_org') || 'null')
-      if (token && org) return { token, org }
+      const member = JSON.parse(localStorage.getItem('vn_member') || 'null')
+      if (token && org) return { token, org, member }
     } catch {}
     return null
   })
   const [page, setPage] = useState('overview')
+  const [pendingOverrides, setPendingOverrides] = useState(0)
   const token = user?.token || null
+  // role: 'admin' for org-level logins and supervisor members, 'member' for reviewer members
+  const role = user?.member?.role || 'admin'
   const { verifications, loading, error, refresh, lastRefresh } = useVerifications(token)
+
+  // Poll for pending override count (badge on sidebar)
+  useEffect(() => {
+    if (!token) return
+    const fetchPending = async () => {
+      try {
+        const resp = await fetch(`${API_BASE_URL}/api/override-requests?status=pending_approval`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        const data = await resp.json()
+        setPendingOverrides((data.override_requests || []).length)
+      } catch {}
+    }
+    fetchPending()
+    const interval = setInterval(fetchPending, 30000)
+    return () => clearInterval(interval)
+  }, [token])
 
   const handleLogout = () => {
     localStorage.removeItem('vn_token')
     localStorage.removeItem('vn_org')
+    localStorage.removeItem('vn_member')
     setUser(null)
   }
 
@@ -1575,16 +2104,18 @@ export default function App() {
     overview: <OverviewPage {...sharedProps} />,
     send: <SendVerificationPage orgName={orgName} token={token} />,
     batch: <BatchUploadPage orgName={orgName} token={token} />,
-    verifications: <VerificationsPage {...sharedProps} />,
+    verifications: <VerificationsPage {...sharedProps} token={token} />,
+    approvals: <ApprovalsPage token={token} role={role} />,
     analytics: <AnalyticsPage {...sharedProps} />,
     apikeys: <ApiKeysPage token={token} />,
+    team: <TeamPage token={token} />,
   }
 
   return (
     <div className="flex h-screen bg-slate-50">
-      <Sidebar page={page} setPage={setPage} orgName={orgName} onLogout={handleLogout} />
+      <Sidebar page={page} setPage={setPage} orgName={orgName} role={role} pendingCount={pendingOverrides} onLogout={handleLogout} />
       <main className="flex-1 overflow-y-auto p-6">
-        {pages[page]}
+        {pages[page] || pages.overview}
       </main>
     </div>
   )
